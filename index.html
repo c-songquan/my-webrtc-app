@@ -1,158 +1,190 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC 调试工具 - 专业版</title>
+    <title>WebRTC 完整调音版</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #eee; text-align: center; padding: 20px; }
-        .card { background: #1e1e1e; padding: 20px; border-radius: 15px; max-width: 500px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        video { width: 100%; background: #000; border-radius: 10px; margin: 10px 0; }
-        #local-video { width: 120px; position: absolute; right: 30px; border: 2px solid #007bff; }
-        .control-group { background: #2a2a2a; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: left; }
-        .slider-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
-        input[type="range"] { width: 100%; cursor: pointer; }
-        .status-bar { padding: 5px 10px; border-radius: 20px; font-size: 12px; border: 1px solid #444; display: inline-block; margin-bottom: 10px; }
-        .p2p { color: #00ff00; border-color: #00ff00; }
-        button { padding: 10px 15px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; margin: 5px; }
-        .btn-primary { background: #007bff; color: white; }
-        .btn-switch { background: #444; color: white; }
-        .active { background: #28a745 !important; }
+        /* 保持你喜欢的黑色简约风格 */
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: white; padding: 20px; margin: 0; }
+        .video-box { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 10px; }
+        video { width: 95%; max-width: 450px; border: 2px solid #444; border-radius: 12px; background: #000; }
+        #local-video { width: 120px; position: absolute; right: 20px; bottom: 180px; border-color: #007bff; transform: scaleX(-1); }
+        
+        /* 波动灯带 */
+        .vol-meter { width: 200px; height: 8px; background: #333; border-radius: 4px; margin: 10px auto; overflow: hidden; }
+        #vol-level { width: 0%; height: 100%; background: #00ff00; transition: width 0.05s; }
+
+        /* 结果与状态 */
+        #result-tag { margin: 10px 0; padding: 10px; border-radius: 8px; font-size: 0.9rem; background: #333; display: inline-block; }
+        .success-p2p { color: #00ff00; border: 1px solid #00ff00; }
+        .fail-relay { color: #ffcc00; border: 1px solid #ffcc00; }
+
+        /* 新增的微调控制区 (保持低调) */
+        .controls-mini { font-size: 12px; color: #ccc; margin: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .slider-row { display: flex; align-items: center; gap: 10px; width: 250px; }
+        input[type="range"] { flex: 1; height: 4px; }
+        .btn-ns { padding: 4px 10px; font-size: 11px; border-radius: 4px; border: 1px solid #666; background: #222; color: #fff; cursor: pointer; }
+        .ns-on { background: #28a745; border-color: #28a745; }
+
+        input[type="text"] { padding: 12px; border-radius: 8px; border: none; margin: 5px; width: 180px; background: #333; color: white; }
+        button.main-btn { padding: 12px 20px; border-radius: 8px; border: none; background: #007bff; color: white; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h3>WebRTC 实时调音台</h3>
-    <div id="conn-status" class="status-bar">未连接</div>
+    <h2>ID 通话 (完整功能版)</h2>
+    <input type="text" id="myId" placeholder="我的 ID">
+    <button class="main-btn" onclick="startPeer()">启动</button>
     
-    <div style="position: relative;">
+    <div class="vol-meter"><div id="vol-level"></div></div>
+
+    <div class="video-box">
         <video id="remote-video" autoplay playsinline></video>
         <video id="local-video" autoplay playsinline muted></video>
     </div>
 
-    <div class="control-group">
-        <div class="slider-label">
-            <span>降噪模式 (Noise Suppression)</span>
-            <button id="noise-btn" class="btn-switch" onclick="toggleNoiseSuppression()">已关闭 (原始音)</button>
+    <div id="result-tag">等待通话...</div>
+
+    <div class="controls-mini">
+        <div class="slider-row">
+            <span>降噪模式:</span>
+            <button id="ns-btn" class="btn-ns" onclick="toggleNS()">关闭 (原始音)</button>
+        </div>
+        <div class="slider-row">
+            <span>我的音量:</span>
+            <input type="range" id="l-gain" min="0" max="5" step="0.1" value="1.0" oninput="adjLocal(this.value)">
+            <span id="l-val">1.0x</span>
+        </div>
+        <div class="slider-row">
+            <span>对方音量:</span>
+            <input type="range" id="r-gain" min="0" max="10" step="0.5" value="1.0" oninput="adjRemote(this.value)">
+            <span id="r-val">1.0x</span>
         </div>
     </div>
 
-    <div class="control-group">
-        <div class="slider-label"><span>我的麦克风增益 (发送)</span><span id="local-vol-txt">1.0x</span></div>
-        <input type="range" id="local-gain" min="0" max="5" step="0.1" value="1.0" oninput="updateLocalGain(this.value)">
+    <div style="margin-top: 10px;">
+        <input type="text" id="destId" placeholder="对方 ID">
+        <button class="main-btn" onclick="makeCall()">拨打</button>
     </div>
 
-    <div class="control-group">
-        <div class="slider-label"><span>对方声音音量 (接收)</span><span id="remote-vol-txt">1.0x</span></div>
-        <input type="range" id="remote-gain" min="0" max="5" step="0.1" value="1.0" oninput="updateRemoteGain(this.value)">
-    </div>
+    <script>
+        let peer, localStream, currentCall;
+        let lGainNode, rGainNode, rAudioCtx;
+        let useNS = false; // 默认不降噪
 
-    <div style="margin-top: 20px;">
-        <input type="text" id="myId" placeholder="设我的ID" style="padding: 10px; border-radius: 5px; width: 80px;">
-        <button class="btn-primary" onclick="initPeer()">启动</button>
-        <input type="text" id="destId" placeholder="对方ID快速拨打" style="padding: 10px; border-radius: 5px; width: 80px;">
-        <button class="btn-primary" onclick="makeCall()">拨打</button>
-    </div>
-</div>
-
-<script>
-    let peer, localStream, remoteAudioCtx, remoteGainNode, localGainNode;
-    let isNoiseSuppressed = false;
-
-    // 更新本地发送音量
-    function updateLocalGain(val) {
-        if (localGainNode) localGainNode.gain.value = val;
-        document.getElementById('local-vol-txt').innerText = val + "x";
-    }
-
-    // 更新对方接收音量
-    function updateRemoteGain(val) {
-        if (remoteGainNode) remoteGainNode.gain.value = val;
-        document.getElementById('remote-vol-txt').innerText = val + "x";
-    }
-
-    // 切换降噪模式 (需要重新获取媒体流)
-    async function toggleNoiseSuppression() {
-        isNoiseSuppressed = !isNoiseSuppressed;
-        const btn = document.getElementById('noise-btn');
-        btn.innerText = isNoiseSuppressed ? "已开启 (过滤杂音)" : "已关闭 (原始音)";
-        btn.classList.toggle('active', isNoiseSuppressed);
-        
-        // 重新获取流并更新当前通话
-        await getMedia(true);
-        if (peer && peer.connections) {
-            alert("降噪设置已更改，请重新拨打以应用效果。");
+        // 1. 调节本地发送音量
+        function adjLocal(v) {
+            if(lGainNode) lGainNode.gain.value = v;
+            document.getElementById('l-val').innerText = v + "x";
         }
-    }
 
-    async function getMedia(refresh = false) {
-        if (localStream && !refresh) return localStream;
-        
-        // 如果是刷新流，先停止旧音轨
-        if (localStream) localStream.getTracks().forEach(t => t.stop());
+        // 2. 调节对方接收音量
+        function adjRemote(v) {
+            if(rGainNode) rGainNode.gain.value = v;
+            document.getElementById('r-val').innerText = v + "x";
+        }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-                echoCancellation: isNoiseSuppressed,
-                noiseSuppression: isNoiseSuppressed,
-                autoGainControl: isNoiseSuppressed
-            },
-            video: { width: 640, height: 480 }
-        });
+        // 3. 切换降噪 (点一下改状态，下次拨打/接听生效)
+        function toggleNS() {
+            useNS = !useNS;
+            const btn = document.getElementById('ns-btn');
+            btn.innerText = useNS ? "开启 (过滤杂音)" : "关闭 (原始音)";
+            btn.className = useNS ? "btn-ns ns-on" : "btn-ns";
+        }
 
-        // 建立本地音量控制 (Gain Node)
-        const ctx = new AudioContext();
-        const source = ctx.createMediaStreamSource(stream);
-        localGainNode = ctx.createGain();
-        localGainNode.gain.value = document.getElementById('local-gain').value;
-        const dest = ctx.createMediaStreamDestination();
-        source.connect(localGainNode);
-        localGainNode.connect(dest);
-
-        localStream = new MediaStream([dest.stream.getAudioTracks()[0], stream.getVideoTracks()[0]]);
-        document.getElementById('local-video').srcObject = localStream;
-        return localStream;
-    }
-
-    function initPeer() {
-        peer = new Peer(document.getElementById('myId').value);
-        peer.on('call', async (call) => {
-            const stream = await getMedia();
-            call.answer(stream);
-            setupRemoteVideo(call);
-        });
-        document.getElementById('conn-status').innerText = "等待呼叫...";
-    }
-
-    async function makeCall() {
-        const stream = await getMedia();
-        const call = peer.call(document.getElementById('destId').value, stream);
-        setupRemoteVideo(call);
-    }
-
-    function setupRemoteVideo(call) {
-        call.on('stream', (rStream) => {
-            const remoteVideo = document.getElementById('remote-video');
-            
-            // 关键：处理对方的声音放大
-            if (!remoteAudioCtx) {
-                remoteAudioCtx = new AudioContext();
-                const source = remoteAudioCtx.createMediaStreamSource(rStream);
-                remoteGainNode = remoteAudioCtx.createGain();
-                remoteGainNode.gain.value = document.getElementById('remote-gain').value;
-                
-                // 将处理后的声音输出到默认扬声器
-                remoteGainNode.connect(remoteAudioCtx.destination);
-                
-                // 视频标签静音，防止声音重复播放
-                remoteVideo.srcObject = rStream;
-                remoteVideo.muted = true; 
+        // 声音波动
+        function visual(stream) {
+            const ctx = new AudioContext();
+            const src = ctx.createMediaStreamSource(stream);
+            const ana = ctx.createAnalyser();
+            ana.fftSize = 256;
+            src.connect(ana);
+            const data = new Uint8Array(ana.frequencyBinCount);
+            function draw() {
+                ana.getByteFrequencyData(data);
+                let avg = data.reduce((a,b)=>a+b)/data.length;
+                document.getElementById('vol-level').style.width = Math.min(avg*2.5, 100) + "%";
+                requestAnimationFrame(draw);
             }
-            document.getElementById('conn-status').innerText = "✅ 通话中";
-        });
-    }
-</script>
+            draw();
+        }
+
+        // 获取媒体 (根据 useNS 决定是否降噪)
+        async function getMedia() {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: useNS, noiseSuppression: useNS, autoGainControl: useNS },
+                video: { width: 480, height: 360, frameRate: 15 }
+            });
+            
+            const ctx = new AudioContext();
+            const src = ctx.createMediaStreamSource(stream);
+            lGainNode = ctx.createGain();
+            lGainNode.gain.value = document.getElementById('l-gain').value;
+            const dst = ctx.createMediaStreamDestination();
+            src.connect(lGainNode);
+            lGainNode.connect(dst);
+
+            const final = new MediaStream([dst.stream.getAudioTracks()[0], stream.getVideoTracks()[0]]);
+            document.getElementById('local-video').srcObject = final;
+            visual(final);
+            localStream = final;
+            return final;
+        }
+
+        // 连接检测
+        function checkICE(pc) {
+            setInterval(async () => {
+                if(!pc) return;
+                const stats = await pc.getStats();
+                stats.forEach(r => {
+                    if(r.type==='transport' && r.selectedCandidatePairId) {
+                        const p = stats.get(r.selectedCandidatePairId);
+                        const rem = stats.get(p.remoteCandidateId);
+                        const tag = document.getElementById('result-tag');
+                        if(rem.candidateType === 'relay') {
+                            tag.innerText = "🕸️ PeerJS 通话 (中继模式)";
+                            tag.className = "fail-relay";
+                        } else {
+                            tag.innerText = "✅ P2P 通话 (直连模式)";
+                            tag.className = "success-p2p";
+                        }
+                    }
+                });
+            }, 3000);
+        }
+
+        function startPeer() {
+            peer = new Peer(document.getElementById('myId').value);
+            peer.on('call', async call => {
+                const s = await getMedia();
+                call.answer(s);
+                handle(call);
+            });
+        }
+
+        async function makeCall() {
+            const s = await getMedia();
+            const call = peer.call(document.getElementById('destId').value, s);
+            handle(call);
+        }
+
+        function handle(call) {
+            call.on('stream', rs => {
+                const rv = document.getElementById('remote-video');
+                if(!rAudioCtx) {
+                    rAudioCtx = new AudioContext();
+                    const src = rAudioCtx.createMediaStreamSource(rs);
+                    rGainNode = rAudioCtx.createGain();
+                    rGainNode.gain.value = document.getElementById('r-gain').value;
+                    rGainNode.connect(rAudioCtx.destination);
+                    rv.srcObject = rs;
+                    rv.muted = true; // 必须静音 video 标签，走 GainNode 输出
+                }
+                checkICE(call.peerConnection);
+            });
+        }
+    </script>
 </body>
 </html>
