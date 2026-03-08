@@ -9,11 +9,11 @@ const port = process.env.PORT || 3000;
 
 app.use(express.static(__dirname));
 
-// 这是你自己的信令中心，开启后就不再报 404
+// 路径只用 /myapp，简单直接
 const peerServer = ExpressPeerServer(server, {
     debug: true,
-    path: '/chatapp',
-    allow_discovery: true // 必须为 true，在线列表才会出来
+    path: '/',
+    allow_discovery: true
 });
 
 app.use('/peerjs', peerServer);
@@ -23,5 +23,5 @@ app.get('/', (req, res) => {
 });
 
 server.listen(port, () => {
-    console.log(`服务器已在端口 ${port} 启动`);
+    console.log(`[OK] 端口 ${port} 已启动`);
 });
