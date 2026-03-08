@@ -7,13 +7,13 @@ const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 3000;
 
-// 让你的网站能显示网页
 app.use(express.static(__dirname));
 
-// 核心：在你自己的域名上开启通讯功能
+// 这是你自己的信令中心，开启后就不再报 404
 const peerServer = ExpressPeerServer(server, {
-    path: '/myapp',
-    allow_discovery: true // 开启这个，你才能看到谁在线
+    debug: true,
+    path: '/chatapp',
+    allow_discovery: true // 必须为 true，在线列表才会出来
 });
 
 app.use('/peerjs', peerServer);
@@ -23,5 +23,5 @@ app.get('/', (req, res) => {
 });
 
 server.listen(port, () => {
-    console.log(`伺服器正在运行`);
+    console.log(`服务器已在端口 ${port} 启动`);
 });
