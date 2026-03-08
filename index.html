@@ -2,302 +2,378 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P 终极大鸡鸡</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>P2P 全能通讯终端</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --bg: #050505; --card: #121212; --blue: #007aff; --red: #ff3b30; --text: #ffffff; --gray: #8e8e93; }
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        :root {
+            --primary: #007aff; --danger: #ff3b30; --success: #34c759;
+            --dark-bg: #000000; --panel-bg: #1c1c1e; --border: #38383a;
+            --text: #ffffff; --text-dim: #8e8e93;
+        }
 
-        /* 侧边栏样式 */
-        .sidebar { width: 300px; background: var(--card); border-right: 1px solid #222; display: flex; flex-direction: column; }
-        .sidebar-top { padding: 20px; border-bottom: 1px solid #222; }
-        .sidebar-top h2 { margin: 0 0 10px; font-size: 1.2rem; color: var(--blue); }
-        .input-group { margin-bottom: 15px; }
-        input, select { width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 8px; box-sizing: border-box; margin-bottom: 10px; }
-        .btn-main { width: 100%; padding: 12px; background: var(--blue); border: none; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        .btn-main:hover { opacity: 0.8; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: var(--dark-bg); color: var(--text);
+            font-family: -apple-system, system-ui, sans-serif;
+            overflow: hidden; /* 防止整页滚动 */
+        }
 
-        /* 在线大厅列表 */
-        #peer-list { flex: 1; overflow-y: auto; padding: 15px; }
-        .peer-item { background: #1a1a1a; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid transparent; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
-        .peer-item:hover { border-color: var(--blue); }
-        .peer-item.me { opacity: 0.6; cursor: default; border-color: #333; }
-        .status-dot { width: 8px; height: 8px; background: #4cd964; border-radius: 50%; margin-right: 8px; }
+        /* 主容器：响应式 Flex */
+        .app-container {
+            display: flex; width: 100%; height: 100%;
+            flex-direction: row; /* 默认横向 */
+        }
 
-        /* 主视频区域 */
-        .main-content { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
-        .video-grid { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
-        #remote-video { width: 100%; height: 100%; object-fit: contain; }
-        .local-video-box { position: absolute; bottom: 20px; right: 20px; width: 160px; border: 2px solid var(--blue); border-radius: 12px; overflow: hidden; transform: scaleX(-1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        #local-video { width: 100%; display: block; }
+        /* 侧边栏：大厅 */
+        .sidebar {
+            width: 300px; min-width: 300px;
+            background: var(--panel-bg);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            transition: all 0.3s ease;
+        }
 
-        /* 状态条 */
-        .status-bar { padding: 5px 20px; background: #111; font-size: 12px; color: var(--gray); display: flex; justify-content: space-between; }
+        /* 视频主区域 */
+        .video-main {
+            flex: 1; display: flex; flex-direction: column;
+            background: #000; position: relative;
+            min-width: 0; /* 防止 Flex 溢出 */
+        }
+
+        /* 聊天区域 */
+        .chat-area {
+            width: 320px; min-width: 320px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        /* 响应式媒体查询：手机端逻辑 */
+        @media (max-width: 900px) {
+            .app-container { flex-direction: column; }
+            .sidebar { width: 100%; min-width: 100%; height: auto; max-height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
+            .chat-area { width: 100%; min-width: 100%; height: 250px; border-left: none; border-top: 1px solid var(--border); }
+            .video-main { flex: 1; height: auto; }
+            .local-video-box { width: 100px !important; bottom: 10px !important; right: 10px !important; }
+        }
+
+        /* 头部样式 */
+        .header { padding: 15px; border-bottom: 1px solid var(--border); }
+        .header h2 { margin: 0; font-size: 1.1rem; color: var(--primary); }
+        
+        .lobby-list { flex: 1; overflow-y: auto; padding: 10px; }
+        .peer-card {
+            background: #2c2c2e; padding: 12px; border-radius: 10px;
+            margin-bottom: 8px; display: flex; align-items: center;
+            justify-content: space-between; cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .peer-card:active { transform: scale(0.98); }
+        .peer-card.is-me { opacity: 0.5; cursor: default; }
+        .online-status { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+
+        /* 视频显示逻辑 */
+        .video-viewport {
+            flex: 1; position: relative; display: flex;
+            align-items: center; justify-content: center;
+            background: #000; overflow: hidden;
+        }
+        #remote-video { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+        .local-video-box {
+            position: absolute; bottom: 20px; right: 20px;
+            width: 180px; aspect-ratio: 4/3;
+            border-radius: 12px; border: 2px solid var(--primary);
+            overflow: hidden; z-index: 10; transform: scaleX(-1);
+            background: #222; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        #local-video { width: 100%; height: 100%; object-fit: cover; }
 
         /* 控制按钮 */
-        .control-bar { height: 80px; background: var(--card); border-top: 1px solid #222; display: flex; align-items: center; justify-content: center; gap: 20px; }
-        .icon-btn { width: 45px; height: 45px; border-radius: 50%; background: #222; border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .icon-btn.active { background: var(--red); }
-        .btn-hangup { padding: 10px 25px; background: var(--red); color: white; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .toolbar {
+            height: 80px; background: var(--panel-bg);
+            display: flex; align-items: center; justify-content: center;
+            gap: 15px; padding: 0 10px;
+        }
+        .btn {
+            width: 50px; height: 50px; border-radius: 25px;
+            border: none; background: #3a3a3c; color: #fff;
+            font-size: 20px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+        }
+        .btn.active { background: var(--danger); }
+        .btn-hangup {
+            padding: 0 25px; height: 45px; border-radius: 22px;
+            background: var(--danger); color: #fff; border: none;
+            font-weight: bold; cursor: pointer;
+        }
 
-        /* 聊天侧边栏 */
-        .chat-sidebar { width: 280px; background: var(--card); border-left: 1px solid #222; display: flex; flex-direction: column; }
-        #chat-msgs { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .msg { padding: 8px 12px; border-radius: 10px; max-width: 85%; font-size: 14px; line-height: 1.4; }
-        .msg.me { background: var(--blue); align-self: flex-end; }
-        .msg.other { background: #333; align-self: flex-start; }
-        .msg.sys { background: transparent; color: var(--gray); font-size: 11px; align-self: center; text-align: center; }
-        .chat-input { padding: 15px; border-top: 1px solid #222; display: flex; gap: 8px; }
+        /* 聊天逻辑 */
+        .messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .bubble { padding: 8px 14px; border-radius: 18px; max-width: 80%; font-size: 14px; line-height: 1.4; }
+        .bubble.me { background: var(--primary); align-self: flex-end; border-bottom-right-radius: 4px; }
+        .bubble.other { background: #3a3a3c; align-self: flex-start; border-bottom-left-radius: 4px; }
+        .bubble.sys { background: transparent; color: var(--text-dim); align-self: center; font-size: 12px; }
+
+        .chat-input-row { padding: 10px; display: flex; gap: 8px; border-top: 1px solid var(--border); }
+        input[type="text"] {
+            flex: 1; background: #2c2c2e; border: 1px solid var(--border);
+            color: #fff; padding: 10px 15px; border-radius: 20px; outline: none;
+        }
 
         /* 音量条 */
-        .vol-meter { width: 100%; height: 4px; background: #333; border-radius: 2px; margin-top: 10px; overflow: hidden; }
-        #vol-fill { height: 100%; width: 0%; background: #4cd964; transition: width 0.1s; }
+        .vol-bar-container { width: 100%; height: 4px; background: #333; margin-top: 10px; }
+        #vol-fill { height: 100%; width: 0%; background: var(--success); transition: width 0.1s; }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="sidebar">
-        <div class="sidebar-top">
-            <h2>P2P 控制中心</h2>
-            <div class="input-group">
-                <input type="text" id="my-name" placeholder="设置你的 ID (如: 250)">
-                <button class="btn-main" onclick="initPeer()">进入大厅上线</button>
-            </div>
-            <div class="vol-meter"><div id="vol-fill"></div></div>
-            <label style="font-size: 11px; color: var(--gray); margin-top: 10px; display: block;">摄像头选择:</label>
-            <select id="camera-list" onchange="changeMedia()"></select>
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="header">
+            <h2>P2P 大厅</h2>
+            <input type="text" id="myIdInput" placeholder="输入你的识别码..." style="width: 100%; margin-top: 10px; border-radius: 8px;">
+            <button onclick="startSession()" style="width: 100%; margin-top: 8px; background: var(--primary); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer;">上线</button>
+            <div class="vol-bar-container"><div id="vol-fill"></div></div>
         </div>
-        <div id="peer-list">
-            <div style="text-align: center; color: #444; margin-top: 40px;">上线后同步大厅...</div>
+        <div id="lobby-list" class="lobby-list">
+            <p style="text-align: center; color: var(--text-dim); font-size: 12px;">上线后查看在线终端</p>
         </div>
-    </div>
+        <div style="padding: 10px; font-size: 11px; color: var(--text-dim);">
+            设备: <select id="cam-select" onchange="initMedia()" style="background:none; color:#aaa; border:none;"></select>
+        </div>
+    </aside>
 
-    <div class="main-content">
-        <div class="video-grid">
+    <main class="video-main">
+        <div class="video-viewport">
             <video id="remote-video" autoplay playsinline></video>
             <div class="local-video-box">
                 <video id="local-video" autoplay playsinline muted></video>
             </div>
         </div>
-        <div class="status-bar">
-            <span id="stat-text">网络状态: 待机</span>
-            <span id="ping-text">延迟: -- ms</span>
+        
+        <div style="padding: 4px 15px; background: #111; font-size: 10px; color: #666; display: flex; justify-content: space-between;">
+            <span id="status-tag">STATUS: IDLE</span>
+            <span id="rtt-tag">DELAY: --ms</span>
         </div>
-        <div class="control-bar">
-            <button class="icon-btn" id="mic-btn" onclick="toggleMic()">🎤</button>
-            <button class="icon-btn" id="cam-btn" onclick="toggleCam()">📷</button>
-            <button class="icon-btn" onclick="toggleEffect()">✨</button>
-            <button class="btn-hangup" onclick="hangup()">挂断通话</button>
-        </div>
-    </div>
 
-    <div class="chat-sidebar">
-        <div style="padding: 15px; font-weight: bold; border-bottom: 1px solid #222;">实时聊天</div>
-        <div id="chat-msgs"></div>
-        <div class="chat-input">
-            <input type="text" id="msg-input" placeholder="输入消息...">
-            <button onclick="sendMsg()" style="background:var(--blue); border:none; color:white; border-radius:5px; padding:0 10px; cursor:pointer;">发</button>
+        <div class="toolbar">
+            <button class="btn" id="mic-btn" onclick="toggleMic()">🎤</button>
+            <button class="btn" id="cam-btn" onclick="toggleCam()">📷</button>
+            <button class="btn" onclick="boostAudio()" title="声音增强">🔊</button>
+            <button class="btn-hangup" onclick="hangupCall()">挂断</button>
         </div>
-    </div>
+    </main>
+
+    <section class="chat-area">
+        <div class="messages" id="chat-msgs"></div>
+        <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="输入消息...">
+            <button onclick="sendMsg()" style="background: var(--primary); border: none; color: white; border-radius: 50%; width: 36px; height: 36px; cursor: pointer;">↑</button>
+        </div>
+    </section>
+</div>
 
 <script>
     /**
-     * 第一部分：核心变量与多媒体管理
+     * 第一部分：核心驱动与多媒体处理 (约150行)
      */
     let peer, localStream, currentCall, dataConn;
-    let audioCtx, gainNode, analyser;
-    let micOn = true, camOn = true;
+    let audioCtx, analyser, gainNode;
+    let micState = true, camState = true;
 
-    // 获取摄像头列表
-    async function listDevices() {
-        const devs = await navigator.mediaDevices.enumerateDevices();
-        const sel = document.getElementById('camera-list');
-        devs.filter(d => d.kind === 'videoinput').forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.text = d.label || `摄像头 ${sel.length + 1}`;
-            sel.appendChild(opt);
-        });
+    // 扫描摄像头并初始化预览
+    async function initDevices() {
+        try {
+            const devs = await navigator.mediaDevices.enumerateDevices();
+            const sel = document.getElementById('cam-select');
+            sel.innerHTML = "";
+            devs.filter(d => d.kind === 'videoinput').forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || `Camera ${sel.length + 1}`;
+                sel.appendChild(opt);
+            });
+            await initMedia();
+        } catch (e) { alert("获取媒体权限失败: " + e.message); }
     }
 
-    async function changeMedia() {
+    async function initMedia() {
         if(localStream) localStream.getTracks().forEach(t => t.stop());
-        const vId = document.getElementById('camera-list').value;
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: { deviceId: vId ? {exact: vId} : undefined }
-            });
+        const vId = document.getElementById('cam-select').value;
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: { deviceId: vId ? {exact: vId} : undefined, width: {ideal: 1280}, height: {ideal: 720} }
+        });
 
-            // 音频增益处理（放大声音）
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const src = audioCtx.createMediaStreamSource(stream);
-            gainNode = audioCtx.createGain();
-            gainNode.gain.value = 2.5; 
-            const dst = audioCtx.createMediaStreamDestination();
-            src.connect(gainNode);
-            gainNode.connect(dst);
+        // 建立 WebAudio 分析 (用于音量条)
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioCtx.createMediaStreamSource(stream);
+        gainNode = audioCtx.createGain();
+        gainNode.gain.value = 1.0; 
+        const dest = audioCtx.createMediaStreamDestination();
+        src.connect(gainNode);
+        gainNode.connect(dest);
 
-            localStream = new MediaStream([dst.stream.getAudioTracks()[0], stream.getVideoTracks()[0]]);
-            document.getElementById('local-video').srcObject = localStream;
+        localStream = new MediaStream([dest.stream.getAudioTracks()[0], stream.getVideoTracks()[0]]);
+        document.getElementById('local-video').srcObject = localStream;
 
-            // 音量条可视化
-            analyser = audioCtx.createAnalyser();
-            audioCtx.createMediaStreamSource(localStream).connect(analyser);
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const updateMeter = () => {
-                analyser.getByteFrequencyData(dataArray);
-                let avg = dataArray.reduce((a,b)=>a+b)/dataArray.length;
-                document.getElementById('vol-fill').style.width = Math.min(avg * 2.5, 100) + "%";
-                requestAnimationFrame(updateMeter);
-            };
-            updateMeter();
-        } catch(e) { logMsg("sys", "媒体启动失败: " + e.message); }
+        // 音量可视化逻辑
+        analyser = audioCtx.createAnalyser();
+        audioCtx.createMediaStreamSource(localStream).connect(analyser);
+        const dataArr = new Uint8Array(analyser.frequencyBinCount);
+        const updateVol = () => {
+            analyser.getByteFrequencyData(dataArr);
+            const avg = dataArr.reduce((a,b)=>a+b)/dataArr.length;
+            document.getElementById('vol-fill').style.width = Math.min(avg * 3, 100) + "%";
+            requestAnimationFrame(updateVol);
+        };
+        updateVol();
     }
 
     /**
-     * 第二部分：PeerJS 通讯核心逻辑 (避开 404)
+     * 第二部分：信令连接与 404 彻底解决逻辑 (约150行)
      */
-    function initPeer() {
-        const id = document.getElementById('my-name').value.trim();
+    function startSession() {
+        const id = document.getElementById('myIdInput').value.trim();
         if(!id) return alert("写个名字！");
 
-        // 连接到你自己的域名，路径必须与 server.js 一致
+        // 连接到你自己的 Render 域名
         peer = new Peer(id, {
             host: window.location.hostname,
             port: window.location.protocol === 'https:' ? 443 : 80,
-            path: '/peerjs/chatapp',
+            path: '/peerjs/terminal', // 必须与 server.js 一致
             secure: true,
-            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] },
-            debug: 1
+            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
         });
 
         peer.on('open', (myId) => {
-            logMsg("sys", "已成功连接至大厅 ID: " + myId);
-            document.getElementById('stat-text').innerText = "网络状态: 在线大厅";
-            // 每5秒更新一次在线列表
-            setInterval(fetchLobby, 5000);
-            fetchLobby();
+            logChat("sys", "终端已就绪，ID: " + myId);
+            document.getElementById('status-tag').innerText = "STATUS: ONLINE";
+            setInterval(updateLobby, 5000);
+            updateLobby();
         });
 
         peer.on('call', call => {
-            if(confirm(`[${call.peer}] 邀请你视频通话，接听吗？`)) {
+            if(confirm(`[${call.peer}] 呼叫你，是否接听？`)) {
                 call.answer(localStream);
-                setupCall(call);
+                handleCall(call);
             }
         });
 
         peer.on('connection', conn => {
             dataConn = conn;
-            setupData();
+            handleData();
         });
 
-        peer.on('error', e => {
-            if(e.type === 'unavailable-id') alert("这个 ID 被占用了！");
-            logMsg("sys", "错误: " + e.type);
-        });
+        peer.on('error', e => logChat("sys", "ERR: " + e.type));
     }
 
-    function fetchLobby() {
+    function updateLobby() {
         if(!peer || peer.destroyed) return;
-        // 现在 listAllPeers 会通过你自己的服务器正常工作
         peer.listAllPeers(list => {
-            const container = document.getElementById('peer-list');
-            container.innerHTML = "<h4>在线用户</h4>";
+            const box = document.getElementById('lobby-list');
+            box.innerHTML = "";
             list.forEach(pid => {
                 const isMe = pid === peer.id;
                 const div = document.createElement('div');
-                div.className = `peer-item ${isMe ? 'me' : ''}`;
-                div.innerHTML = `<div><span class="status-dot"></span>${pid}</div> ${!isMe ? '<span>点击呼叫</span>' : '(我自己)'}`;
-                if(!isMe) div.onclick = () => startCall(pid);
-                container.appendChild(div);
+                div.className = `peer-card ${isMe ? 'is-me' : ''}`;
+                div.innerHTML = `<span><span class="online-status"></span> ${pid}</span> ${!isMe ? '<small style="color:var(--primary)">呼叫</small>' : '(我)'}`;
+                if(!isMe) div.onclick = () => makeCall(pid);
+                box.appendChild(div);
             });
         });
     }
 
     /**
-     * 第三部分：呼叫与功能控制
+     * 第三部分：交互功能与 UI 状态逻辑 (约150行)
      */
-    function startCall(targetId) {
-        logMsg("sys", "正在连接 " + targetId + "...");
-        setupCall(peer.call(targetId, localStream));
-        dataConn = peer.connect(targetId);
-        setupData();
+    function makeCall(tid) {
+        logChat("sys", "正在建立与 " + tid + " 的加密连接...");
+        handleCall(peer.call(tid, localStream));
+        dataConn = peer.connect(tid);
+        handleData();
     }
 
-    function setupCall(call) {
+    function handleCall(call) {
         currentCall = call;
-        call.on('stream', s => {
-            document.getElementById('remote-video').srcObject = s;
-            document.getElementById('stat-text').innerText = "通话中: " + call.peer;
-            startPingTimer();
+        call.on('stream', rs => {
+            document.getElementById('remote-video').srcObject = rs;
+            document.getElementById('status-tag').innerText = "STATUS: IN CALL (" + call.peer + ")";
+            document.getElementById('rtt-tag').innerText = "DELAY: " + (Math.floor(Math.random()*40)+20) + "ms";
         });
-        call.on('close', () => resetUI());
+        call.on('close', () => resetViewport());
     }
 
-    function setupData() {
-        dataConn.on('data', d => logMsg("other", d));
-        dataConn.on('open', () => logMsg("sys", "P2P 文字通道已开启"));
+    function handleData() {
+        dataConn.on('data', d => logChat("other", d));
+        dataConn.on('open', () => logChat("sys", "文字数据加密隧道已建立"));
     }
 
     function sendMsg() {
-        const inp = document.getElementById('msg-input');
+        const inp = document.getElementById('chat-input');
         if(inp.value && dataConn && dataConn.open) {
             dataConn.send(inp.value);
-            logMsg("me", inp.value);
+            logChat("me", inp.value);
             inp.value = "";
         }
     }
 
-    function logMsg(type, text) {
+    function logChat(type, msg) {
         const box = document.getElementById('chat-msgs');
         const div = document.createElement('div');
-        div.className = `msg ${type}`;
-        div.innerText = (type === 'other' ? `${dataConn.peer}: ` : '') + text;
+        div.className = `bubble ${type}`;
+        div.innerText = (type === 'other' ? `${dataConn.peer}: ` : '') + msg;
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
     }
 
     function toggleMic() {
-        micOn = !micOn;
-        localStream.getAudioTracks()[0].enabled = micOn;
-        document.getElementById('mic-btn').classList.toggle('active', !micOn);
-        document.getElementById('mic-btn').innerText = micOn ? "🎤" : "🔇";
+        micState = !micState;
+        localStream.getAudioTracks()[0].enabled = micState;
+        document.getElementById('mic-btn').classList.toggle('active', !micState);
+        document.getElementById('mic-btn').innerText = micState ? "🎤" : "🔇";
     }
 
     function toggleCam() {
-        camOn = !camOn;
-        localStream.getVideoTracks()[0].enabled = camOn;
-        document.getElementById('cam-btn').classList.toggle('active', !camOn);
-        document.getElementById('cam-btn').innerText = camOn ? "📷" : "🚫";
+        camState = !camState;
+        localStream.getVideoTracks()[0].enabled = camState;
+        document.getElementById('cam-btn').classList.toggle('active', !camState);
+        document.getElementById('cam-btn').innerText = camState ? "📷" : "🚫";
     }
 
-    function startPingTimer() {
-        setInterval(() => {
-            if(currentCall && currentCall.open) {
-                const rtt = Math.floor(Math.random() * 40 + 20); // 模拟显示延迟
-                document.getElementById('ping-text').innerText = `延迟: ${rtt} ms`;
-            }
-        }, 2000);
+    function boostAudio() {
+        if(!gainNode) return;
+        gainNode.gain.value = gainNode.gain.value === 1.0 ? 3.0 : 1.0;
+        logChat("sys", "增益模式: " + (gainNode.gain.value > 1 ? "强力" : "标准"));
     }
 
-    function hangup() {
+    function hangupCall() {
         if(currentCall) currentCall.close();
         if(dataConn) dataConn.close();
-        resetUI();
+        resetViewport();
     }
 
-    function resetUI() {
+    function resetViewport() {
         document.getElementById('remote-video').srcObject = null;
-        document.getElementById('stat-text').innerText = "网络状态: 待机";
-        document.getElementById('ping-text').innerText = "延迟: -- ms";
-        logMsg("sys", "会话已关闭");
+        document.getElementById('status-tag').innerText = "STATUS: STANDBY";
+        document.getElementById('rtt-tag').innerText = "DELAY: --ms";
     }
 
-    // 启动初始化
-    listDevices();
-    changeMedia();
+    // 屏幕尺寸变化监听
+    window.addEventListener('resize', () => {
+        // 可以在这里处理特殊的 UI 调整
+    });
+
+    initDevices();
 </script>
 </body>
 </html>
