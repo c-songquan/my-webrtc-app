@@ -1,16 +1,27 @@
 const express = require('express');
+const http = require('http');
 const path = require('path');
+const { ExpressPeerServer } = require('peer'); // 必须有这一行
+
 const app = express();
+const server = http.createServer(app);
 const port = process.env.PORT || 3000;
 
-// 托管当前目录下的静态文件
 app.use(express.static(__dirname));
 
-// 访问根目录时返回 index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// 这里的 /peerjs 是给前端连接用的接口
+const peerServer = ExpressPeerServer(server, {
+    debug: true,
+    path: '/myapp',
+    allow_discovery: true // 开启大厅发现功能
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+app.use('/peerjs', peerServer);
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+server.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
 });
