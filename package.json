@@ -1,12 +1,13 @@
 {
-  "name": "songquan-chat-server",
+  "name": "my-webrtc-app",
   "version": "1.0.0",
-  "description": "WebRTC Video Chat for Malaysia Network",
+  "description": "P2P Video Chat",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "peer": "^1.0.1"
   }
 }
